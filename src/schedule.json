@@ -109,6 +109,47 @@
             ]
         },
         {
+            "date": "2019-06-17",
+            "bookings": [
+                {
+                    "title": "Conference call",
+                    "user_id": "UKBUQMB5E",
+                    "start_time": "6:00",
+                    "end_time": "7:00",
+                    "timeslots": [
+                        "24",
+                        "25",
+                        "26",
+                        "27"
+                    ]
+                },
+                {
+                    "title": "Personal",
+                    "user_id": "UKBUQMB5E",
+                    "start_time": "7:00",
+                    "end_time": "8:00",
+                    "timeslots": [
+                        "28",
+                        "29",
+                        "30",
+                        "31"
+                    ]
+                },
+                {
+                    "title": "Conference call",
+                    "user_id": "UKBUQMB5E",
+                    "start_time": "9:00",
+                    "end_time": "10:00",
+                    "timeslots": [
+                        "36",
+                        "37",
+                        "38",
+                        "39"
+                    ]
+                }
+            ]
+        },
+        {
             "date": "2019-06-18",
             "bookings": [
                 {
@@ -153,6 +194,18 @@
                         "34",
                         "35",
                         "36"
+                    ]
+                },
+                {
+                    "title": "Conference call",
+                    "user_id": "UKBUQMB5E",
+                    "start_time": "9:15",
+                    "end_time": "10:15",
+                    "timeslots": [
+                        "37",
+                        "38",
+                        "39",
+                        "40"
                     ]
                 },
                 {
@@ -219,6 +272,39 @@
                         "33",
                         "34",
                         "35"
+                    ]
+                }
+            ]
+        },
+        {
+            "date": "2019-06-29",
+            "bookings": [
+                {
+                    "title": "Personal",
+                    "user_id": "UKBUQMB5E",
+                    "start_time": "7:00",
+                    "end_time": "8:00",
+                    "timeslots": [
+                        "28",
+                        "29",
+                        "30",
+                        "31"
+                    ]
+                }
+            ]
+        },
+        {
+            "date": "2019-06-30",
+            "bookings": [
+                {
+                    "title": "Conference call",
+                    "user_id": "UKBUQMB5E",
+                    "start_time": "7:30",
+                    "end_time": "8:15",
+                    "timeslots": [
+                        "30",
+                        "31",
+                        "32"
                     ]
                 }
             ]
