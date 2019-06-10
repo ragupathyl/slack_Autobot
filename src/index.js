@@ -1,8 +1,8 @@
 const ts = require('tinyspeck'),
     onboarding = require('./onboarding.json'),
     { PORT, TOKEN } = process.env,
-    users = {},
-    sample = require('./schedule.json');
+    users = {};
+    //sample = require('./schedule.json');
  var fs = require('fs');
 /*State meaning:
  * 0 - NO interactions yet. Idle state
@@ -15,114 +15,188 @@ const ts = require('tinyspeck'),
 // setting defaults for all Slack API calls
 let slack = ts.instance({ token: TOKEN });
 let state = 0;
+let start_time_set = false;
+let end_time_set = false;
+let title_set = false;
+let chosen_title = "Unspecified";
+let chosen_date = null;
+let end_time_ts = null;
+let date_exists = false;
 // build the user's current onboarding message
 function getStatusMessage(user) {
-  return Object.assign({ channel: user }, onboarding.welcome);
+  return Object.assign({ channel: user }, onboarding);
 }
 
-// watch for onboarding slash commands
 slack.on('/onboarding', payload => {
-    //console.log("Onboarding!\n");
 
     let { user_id, response_url } = payload;
-    //console.log(typeof user_id);
-    //console.log(user_id);
   let message = getStatusMessage(user_id);
   let responsetype = "in_channel";
-  // send current onboarding status privately
     slack.send(response_url,{ response_type: responsetype }, message);
-    //console.log("changed code!\n");
 });
 
-slack.on
+function getTodayDate() {
+    let today = new Date();
+    let dd = String(today.getDate()).padStart(2, '0');
+    let mm = String(today.getMonth() + 1).padStart(2, '0');
+    let yyyy = String(today.getFullYear());
+    return (yyyy + "-" + mm + "-" + dd);
+}
 
+function datePickerMessage(user) {
+    return {
+        blocks: [{
+            type: "section",
+            text: {
+                type: "mrkdwn",
+                text: "Hi! <@" + user + ">, Would you like to book the conference room?"
+            },
+            accessory: {
+                type: "datepicker",
+                initial_date: today,
+                placeholder: {
+                    type: "plain_text",
+                    text: "Select a date",
+                    emoji: true
+                }
+            }
+        }]
+    };
+}
 slack.on('app_mention', payload => {
-   // console.log("I was mentioned in a channel");
-    //console.log(payload);
-    let { event } = payload;
-    let { user, channel, text } = event;
-   // console.log("I was mentioned by " + user + " in channel " + channel);
-    //let message = respondToUser(user, channel, text);
-    var words = text.split(" ");
+    //let { event } = payload;
+    let { user, channel, text } = payload.event;
+    let words = text.split(" ");
     if (words.length <= 2) {
-        /*
-        var text_message = "Hi! <@" + user + ">, Would you like to book the conference room?";
-        let placeholder = Object.assign({ type: "plain_text", text: "Select a date", emoji: true });
-        //console.log(placeholder);
-        let accessory = Object.assign({ type: "datepicker", initial_date: "2019-06-08", placeholder });
-        var text_details = {  };
-        var blocks_details = { type: "section", text: text_details, accessory };
-        */
-        let message = {
-            attachments: [{
-                blocks: [{
-                    type: "section",
-                    text: {
-                        type: "mrkdwn",
-                        text: "Hi! <@"+user+">, Would you like to book the conference room?"
-                    },
-                    accessory: {
-                        type: "datepicker",
-                        initial_date: "2019-06-08",
-                        placeholder: {
-                            type: "plain_text",
-                            text: "Select a date",
-                            emoji: true
-                        }
-                    }
-                }]
-            }]
+        if (words.includes("thanks") || words.includes("Thanks!") || words.includes("Thanks") || words.includes("thanks!") || words.includes("Thank you") || words.includes("thank you")) {
+            slack.send({ channel: channel, text: "<@" + user + ">, Of course!" })
         }
-        slack.send({ channel: channel }, message);
-        //console.log(blocks);
-        //var attachments = Object.assign([blocks]);
-        // var message = Object.assign({ channel: channel ,  link_names: "true" , block});
+        else {
+            today = getTodayDate();
+            let message = datePickerMessage(user);
+            slack.send({ channel: channel, text:"Dudu responding..." }, message);
+        }
     }
-    //let responsetype = "in_channel";
-    //let message = { channel: channel, link_names: "true", text:"HI" }
-    // send current onboarding status privately
-    //console.log({ channel: channel, link_names: "true", text });
-    //slack.send({ channel: channel, link_names: "true", text });
-    //console.log(sample);
-    //slack.send(sample.welcome, {text: "HI"});
-    
-    //console.log("changed code!\n");
 });
+
+//--------------------------------------------------------------------------------------------------------------------
 
 slack.on("block_actions", payload => {
-    console.log(payload);
-    //console.log("Sending message!");
-   // console.log(payload.actions.length);
+
     payload.actions.forEach(action => {
         if (action.type === "datepicker") {
             //console.log(action.selected_date);
-            
-            if (sample.welcome.conference_schedule.find(element => {return element.date === action.selected_date }) === undefined) {
-                let message = {
-                    attachments: [{
-                        blocks: [
-                            {
-                                type: "section",
-                                text: {
-                                    type: "mrkdwn",
-                                    text: "No bookings on *" + action.selected_date + "*"
-                                }
-                            },
-                            {
-                                type: "divider"
-                            }
-                        ]
-                    }]
+            chosen_date = action.selected_date;
+            sample = require('./schedule.json');
+            if (sample.conference_schedule.find(element => {return element.date === action.selected_date }) === undefined) {
+
+                let blocks_data = [];
+                field_data = {
+                    type: "section",
+                    text: {
+                        type: "mrkdwn",
+                        text: "Schedule for the day of *" + action.selected_date + "*"
+                    }
+                }
+                blocks_data.push(field_data);
+                field_data = {
+                    type: "divider"
                 }
 
-                slack.send({ channel: payload.channel.id }, message);
+                blocks_data.push(field_data);
+                field_data ={
+                    type: "section",
+                    text: {
+                        type: "mrkdwn",
+                        text: "No bookings!"
+                    }   
+                }
+                blocks_data.push(field_data);
+                field_data = {
+                    type: "divider"
+                }
+
+                blocks_data.push(field_data);
+
+                let title_name_options = ["Team meeting", "Conference call", "Hosting guests", "Personal", "Ping-pong", "Unspecified"]
+                let title_options_list = [];
+                for (let i = 0; i < 6; i++) {
+                    title_option = {
+                        text: {
+                            type: "plain_text",
+                            text: title_name_options[i]
+                        },
+                        value: title_name_options[i]
+                    }
+                    title_options_list.push(title_option);
+                }
+                booking_title_list = {
+                    type: "section",
+                    text: {
+                        type: "mrkdwn",
+                        text: "Pick an appropriate title for the booking"
+                    },
+                    accessory: {
+                        type: "static_select",
+                        action_id: "title",
+                        placeholder: {
+                            type: "plain_text",
+                            text: "Select a title"
+
+                        },
+                        options: title_options_list
+                    }
+                }
+                blocks_data.push(booking_title_list);
+
+
+                current_time = 24;
+                let start_time_list = [];
+                while (current_time < 72) {
+                    
+                    time_options = {
+                        text: {
+                            type: "plain_text",
+                            text: (Math.floor(current_time / 4)).toString() + ":" + (((current_time % 4) * 15).toString()).padStart(2, '0')
+                        },
+                        value: current_time.toString()
+                    }
+                    start_time_list.push(time_options);
+                    current_time = current_time + 1;
+                }
+
+                //console.log(start_time_list);
+                starting_time_list = {
+                    type: "section",
+                    text: {
+                        type: "mrkdwn",
+                        text: "Pick a starting time from the list"
+                    },
+                    accessory: {
+                        type: "static_select",
+                        action_id: "start_time",
+                        placeholder: {
+                            type: "plain_text",
+                            text: "Select a time"
+
+                        },
+                        options: start_time_list
+                    }
+                }
+                blocks_data.push(starting_time_list);
+
+
+                let message = {
+                    blocks:
+                        blocks_data
+                }
+                //console.log(blocks_data);
+                slack.send({ channel: payload.channel.id, parse: "full" }, message);
+                
             }
             let used_timeslots = [];
-            sample.welcome.conference_schedule.forEach(day => {
+            sample.conference_schedule.forEach(day => {
                 if (day.date === action.selected_date) {
-                    //console.log(day.bookings);
-                    
-                    //var fields_data = new dict();
                     let blocks_data = [];
                     field_data = {
                         type: "section",
@@ -147,14 +221,18 @@ slack.on("block_actions", payload => {
                             }
                         }
                         blocks_data.push(field_data);
+
                         used_timeslots.push(...booking.timeslots);
                         //fields.push(field_data);
                     });
-                    //console.log("USED time slots:");
-                    //console.log(used_timeslots);
+
+                    field_data = {
+                        type: "divider"
+                    }
+                    blocks_data.push(field_data);
+
                     if (day.bookings.length === 0) {
                         let message = {
-                            attachments: [{
                                 blocks: [
                                     {
                                         type: "section",
@@ -166,7 +244,6 @@ slack.on("block_actions", payload => {
                                     {
                                         type: "divider"
                                     }]
-                            }]
                         }
 
                         slack.send({ channel: payload.channel.id }, message);
@@ -174,9 +251,43 @@ slack.on("block_actions", payload => {
                     // console.log(blocks_data)
                     else {
                         //time_options
-                        start_time = 24;
+                        let title_name_options = ["Team meeting", "Conference call", "Hosting guests", "Personal", "Ping-pong", "Unspecified"]
+                        let title_options_list = [];
+                        for (let i = 0; i < 6; i++) {
+                            title_option = {
+                                text: {
+                                    type: "plain_text",
+                                    text: title_name_options[i]
+                                },
+                                value: title_name_options[i]
+                            }
+                            title_options_list.push(title_option);
+                        }
+                        booking_title_list = {
+                            type: "section",
+                            text: {
+                                type: "mrkdwn",
+                                text: "Pick an appropriate title for the booking"
+                            },
+                            accessory: {
+                                type: "static_select",
+                                action_id: "title",
+                                placeholder: {
+                                    type: "plain_text",
+                                    text: "Select a title"
+
+                                },
+                                options: title_options_list
+                            }
+                        }
+                        blocks_data.push(booking_title_list);
+
+                        
+                        //console.log(blocks_data);
+                       
+                        //start_time = 24;
                         current_time = 24;
-                        let options_list = [];
+                        let start_time_list = [];
                         while (current_time < 72) {
                             if (used_timeslots.includes(current_time.toString())) {
                                 //console.log(current_time + " exists in the timeslots");
@@ -190,11 +301,12 @@ slack.on("block_actions", payload => {
                                 },
                                 value: current_time.toString()
                             }
-                            options_list.push(time_options);
+                            start_time_list.push(time_options);
                             current_time = current_time + 1;
                         }
-                        //console.log(options_list);
-                        dropdown_list = {
+
+                        //console.log(start_time_list);
+                        starting_time_list = {
                             type: "section",
                             text: {
                                 type: "mrkdwn",
@@ -202,25 +314,24 @@ slack.on("block_actions", payload => {
                             },
                             accessory: {
                                 type: "static_select",
+                                action_id: "start_time",
                                 placeholder: {
                                     type: "plain_text",
                                     text: "Select a time"
                                   
                                 },
-                                options: options_list
+                                options: start_time_list
                             }
                         }
-                       // console.log(dropdown_list);
-                        //Math.floor(current_time / 4) + ":" + (((current_time % 4) * 15).toString()).padStart(2,'0'),
-                        blocks_data.push(dropdown_list);
+                        blocks_data.push(starting_time_list);
+
+
                         let message = {
-                            attachments: [{
                                 blocks:
                                     blocks_data
-                            }]
                         }
                         //console.log(blocks_data);
-                        slack.send({ channel: payload.channel.id }, message);
+                        slack.send({ channel: payload.channel.id, parse: "full" }, message);
                     }
                    // console.log(message)
                 }
@@ -228,51 +339,248 @@ slack.on("block_actions", payload => {
             
         }
         else if (action.type === "static_select") {
-            fs.readFile('./src/schedule.json','utf8', function read(err, data) {
+            console.log(action.selected_option.text.text);
+            fs.readFile('./src/schedule.json', 'utf8', function read(err, data) {
                 if (err) {
                     throw err;
                 }
-                content = data;
-                console.log("Printing content of JSON file after getting response from static select:");
-                console.log(content);
-                console.log(typeof content);
-                //console.log(data);
+                schedule_obj = JSON.parse(data);
+                console.log(schedule_obj.conference_schedule[0].bookings);
+                
+                if (action.action_id === "title") {
+                    chosen_title = action.selected_option.text.text;
+                    title_set = true;
+                    console.log("Chosen_title : " + chosen_title);
+                    choosing_user = payload.user.id;
+                    console.log("Choosing_user : " + choosing_user);
+                }
+                else if (action.action_id === "start_time") {
+                    start_time_index = action.selected_option.value;
+                    start_time_set = true;
+                    console.log("Start time index : " + start_time_index);
+                    start_time = action.selected_option.text.text
+                    end_time_index = 72;
+                    console.log("CHosen date : " + chosen_date);
+                    date_exists = false;
+                    schedule_obj.conference_schedule.forEach(day => {
+                        //console.log("foreach date : " + day.date);
+                        if (day.date === chosen_date) {
+                            date_exists = true;
+                            for (let i = 0; i < day.bookings.length; i++) {
+                                if (start_time_index < day.bookings[i].timeslots[0]) {
+                                    end_time_index = day.bookings[i].timeslots[0];
+                                    break;
+                                }
+                            }
+                            console.log("End time index : " + end_time_index);
+                            let blocks_data = [];
+                            current_time = Number(start_time_index) + 1;
 
+                            console.log("Current time : " + current_time);
+                            let end_time_list = [];
+                            while (current_time <= end_time_index) {
+                                console.log("Current time : " + current_time);
+                                time_options = {
+                                    text: {
+                                        type: "plain_text",
+                                        text: (Math.floor(current_time / 4)).toString() + ":" + (((current_time % 4) * 15).toString()).padStart(2, '0')
+                                    },
+                                    value: current_time.toString()
+                                }
+                                end_time_list.push(time_options);
+                                current_time = current_time + 1;
+                            }
+
+                            //console.log(start_time_list);
+                            ending_time_list = {
+                                type: "section",
+                                text: {
+                                    type: "mrkdwn",
+                                    text: "Pick an ending time from the list"
+                                },
+                                accessory: {
+                                    type: "static_select",
+                                    action_id: "end_time",
+                                    placeholder: {
+                                        type: "plain_text",
+                                        text: "Select a time"
+
+                                    },
+                                    options: end_time_list
+                                }
+                            }
+                            blocks_data.push(ending_time_list);
+
+
+                            let message = {
+                                    blocks:
+                                        blocks_data
+                               
+                            }
+                            //console.log(blocks_data);
+                            if (end_time_ts === null) {
+                                slack.send({ channel: payload.channel.id }, message);
+                            }
+                            else {
+                                slack.send({ channel: payload.channel.id,ts: end_time_ts }, message);
+                            }
+
+                            //break;
+                        }
+                    });
+                    if (date_exists === false) {
+                       
+                        end_time_index = 72;
+                        let blocks_data = [];
+                        current_time = Number(start_time_index) + 1;
+
+                        console.log("Current time : " + current_time);
+                        let end_time_list = [];
+                        while (current_time <= end_time_index) {
+                            console.log("Current time : " + current_time);
+                            time_options = {
+                                text: {
+                                    type: "plain_text",
+                                    text: (Math.floor(current_time / 4)).toString() + ":" + (((current_time % 4) * 15).toString()).padStart(2, '0')
+                                },
+                                value: current_time.toString()
+                            }
+                            end_time_list.push(time_options);
+                            current_time = current_time + 1;
+                        }
+
+                        //console.log(start_time_list);
+                        ending_time_list = {
+                            type: "section",
+                            text: {
+                                type: "mrkdwn",
+                                text: "Pick an ending time from the list"
+                            },
+                            accessory: {
+                                type: "static_select",
+                                action_id: "end_time",
+                                placeholder: {
+                                    type: "plain_text",
+                                    text: "Select a time"
+
+                                },
+                                options: end_time_list
+                            }
+                        }
+                        blocks_data.push(ending_time_list);
+
+
+                        let message = {
+                            blocks:
+                                blocks_data
+
+                        }
+                        //console.log(blocks_data);
+                        if (end_time_ts === null) {
+                            slack.send({ channel: payload.channel.id }, message);
+                        }
+                        else {
+                            slack.send({ channel: payload.channel.id, ts: end_time_ts }, message);
+                        }
+
+                    }
+
+
+                }
+                else if (action.action_id === "end_time") {
+                    end_time_ts = payload.message.ts;
+                    end_time_set = true;
+                    end_time_index = action.selected_option.value;
+                    console.log("End time index : " + end_time_index);
+                    end_time = action.selected_option.text.text
+                }
+
+                if (start_time_set && end_time_set) {
+                    let timeslots = [];
+                    for (let i = Number(start_time_index); i < Number(end_time_index); i++) {
+                        timeslots.push(i.toString());
+                    }
+                    booking = {
+                        title: chosen_title,
+                        user_id: payload.user.id,
+                        start_time: start_time,
+                        end_time: end_time,
+                        timeslots: timeslots
+                    }
+                    if (date_exists === false) {
+                        schedule_obj.conference_schedule.push({
+                            date: chosen_date,
+                            bookings: []
+                        });
+
+                        schedule_obj.conference_schedule.sort((a, b) => {
+                            let result = 0;
+                            let date1 = a.date.split("-");
+                            let date2 = b.date.split("-");
+                            yyyy1 = Number(date1[0]);
+                            yyyy2 = Number(date2[0]);
+                            mm1 = Number(date1[1]);
+                            mm2 = Number(date2[1]);
+                            dd1 = Number(date1[2]);
+                            dd2 = Number(date2[2]);
+                            if (yyyy1 > yyyy2) result = 1;
+                            else if (yyyy1 < yyyy2) result = -1;
+                            else {
+                                if (mm1 > mm2) result = 1;
+                                else if (mm1 < mm2) result = -1;
+                                else {
+                                    if (dd1 > dd2) result = 1;
+                                    else if (dd1 < dd2) result = -1;
+                                    else result = 0;
+                                }
+                            }
+                            return result;
+                        });
+
+                    }
+                    console.log("conference schedule after creating new date");
+                    console.log(schedule_obj.conference_schedule);
+                    schedule_obj.conference_schedule.forEach(day => {
+                        if (day.date === chosen_date) {
+                            day.bookings.push(booking)
+                       
+                            console.log(day.bookings);
+                            day.bookings.sort((a, b) => {
+                                let result = 0;
+                                num1 = a.timeslots[0].padStart(2, '0');
+                                num2 = b.timeslots[0].padStart(2, '0');
+                                if (num1 > num2) result = 1;
+
+                                if (num1 < num2) result = -1;
+                                return result;
+                            });
+                        }
+                    });
+                    console.log("<@" + payload.user.id + ">, You have booked the conference room on " + chosen_date + " from " + start_time + " to " + end_time);
+
+                    json = JSON.stringify(schedule_obj,null,4);
+                    fs.writeFile('./src/schedule.json', json, 'utf8', function read(err, data) {
+                        if (err) {
+                            throw err;
+                        }
+                        confirmation_message = {
+                            type: "section",
+                            text: {
+                                type: "mrkdwn",
+                                text: "<@" + payload.user.id + ">, You have booked the conference room on " + chosen_date + " from " + start_time + " to " + end_time
+                            }
+                        }
+                        let message = {
+                            blocks:[
+                                confirmation_message
+                                ]}
+                        slack.send({ channel: payload.channel.id, link_names: "true" },message)
+                    });
+                }
             });
         }
     })
-    //console.log(payload.actions[].selected_date);
-    //console.log({ channel: payload.channel.id }, { text: payload.actions["wD+"].selected_date + " looks good!" });
-    //slack.send({ channel: payload.channel.id }, { text: payload.actions["wD+"].selected_date + " looks good!" });
 })
-
-// event handler
-slack.on('star_added', 'pin_added', 'reaction_added', payload => {
-  let {type, user, item} = payload.event;
-    //console.log(user);
-  // get the user's current onboarding message
-  let message = getStatusMessage(user);
-
-
-  // modify completed step
-  message.attachments.forEach(step => {
-    if (step.event === type && !step.completed) {
-      step.title += " :white_check_mark:";
-      step.color = "#2ab27b";
-      step.completed = true;
-    }
-  });
-
-    let responsetype = "in_channel";
-    let value = "true";
-    // save the message and update the timestamp
-    slack.send({ as_user: value }, message).then(res => {
-        let { ts, channel } = res;
-        //console.log("Channel = ");
-        //console.log(channel);
-        users[user] = Object.assign({}, message, { ts: ts, channel: channel });
-  });
-});
 
 
 // incoming http requests
