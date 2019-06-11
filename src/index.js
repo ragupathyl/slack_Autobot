@@ -1,16 +1,9 @@
 const ts = require('tinyspeck'),
-    onboarding = require('./onboarding.json'),
     { PORT, TOKEN } = process.env,
     users = {};
-    //sample = require('./schedule.json');
- var fs = require('fs');
-/*State meaning:
- * 0 - NO interactions yet. Idle state
- * 1 - 
- *
- *
- * 
- */
+//schedule_obj = require('./schedule.json');
+var fs = require('fs');
+const BOT_CHANNEL = 'DK0HTCCSX'
 
 // setting defaults for all Slack API calls
 let slack = ts.instance({ token: TOKEN });
@@ -21,10 +14,14 @@ let title_set = false;
 let chosen_title = "Unspecified";
 let chosen_date = null;
 let end_time_ts = null;
+let schedule_ts = null;
 let date_exists = false;
 let date_position = -1;
 let min_time_index = 24;
 let max_time_index = 72;
+let ts_list = [];
+let deleted_positions = [];
+let first_datepicker = true;
 
 function resetValues() {
     start_time_set = false;
@@ -33,22 +30,42 @@ function resetValues() {
     chosen_title = "Unspecified";
     chosen_date = null;
     end_time_ts = null;
+    //schedule_ts = null;
     date_exists = false;
     date_position = -1;
     min_time_index = 24;
     max_time_index = 72;
+    //ts_list = [];
+    //console.log("Reset is called!!!");
+}
+
+function adjustedPosition(position) {
+    let count = 0;
+    deleted_positions.forEach(num => {
+        if (num <= position) count++;
+    });
+    return count;
+}
+
+function timeouts() {
+    ts_list.forEach(element => {
+        slack.send('chat.delete',{ channel: element.channel, ts: element.ts});
+    });
+    ts_list = [];
+    resetValues();
 }
 // build the user's current onboarding message
-function getStatusMessage(user) {
-  return Object.assign({ channel: user }, onboarding);
+function getHelpMessage() {
+    return Object.assign(autobot_help.welcome);
 }
 
-slack.on('/onboarding', payload => {
-
-    let { user_id, response_url } = payload;
-  let message = getStatusMessage(user_id);
-  let responsetype = "in_channel";
-    slack.send(response_url,{ response_type: responsetype }, message);
+slack.on('/autobot', payload => {
+    console.log(payload);
+    autobot_help = require('./autobot.json');
+    let { response_url } = payload;
+    let message = getHelpMessage();
+    let responsetype = "ephemeral";
+    slack.send(response_url, { response_type: responsetype }, message);
 });
 
 function getTodayDate() {
@@ -81,6 +98,7 @@ function datePickerMessage(user) {
 }
 slack.on('app_mention', payload => {
     //let { event } = payload;
+    first_datepicker = true;
     let { user, channel, text } = payload.event;
     let words = text.split(" ");
     if (words.length <= 2) {
@@ -90,12 +108,60 @@ slack.on('app_mention', payload => {
         else {
             today = getTodayDate();
             let message = datePickerMessage(user);
-            slack.send({ channel: channel, text:"Dudu responding..." }, message);
+            slack.send({ channel: channel, text: "Autobot responding..." }, message).then(payload2 => {
+                let { channel, ts } = payload2;
+                ts_list.push({ channel: channel, ts: ts });
+                console.log(ts_list);
+                setTimeout((channel1, ts1) => {
+                    slack.send('chat.delete',{channel: channel1,ts: ts1});
+                },60000, channel, ts);
+
+
+            });
         }
+    }
+    else {
+        slack.send({ channel: channel, text: "<@" + user + ">, Too many words! Autobot isn't sentient... yet..." });
+        slack.send({ channel: channel, text: "Type /help for info" });
+        
     }
 });
 
+
+slack.on('message', payload => {
+    //console.log(payload);
+    first_datepicker = true;
+    let { user, channel, text, subtype } = payload.event;
+    if (subtype === "bot_message" || subtype === 'message_changed' || channel!== BOT_CHANNEL) return;
+    let words = text.split(" ");
+    if (words.length <= 2) {
+        if (words.includes("thanks") || words.includes("Thanks!") || words.includes("Thanks") || words.includes("thanks!") || words.includes("Thank you") || words.includes("thank you")) {
+            slack.send({ channel: channel, text: "<@" + user + ">, Of course!" })
+        }
+        else {
+            today = getTodayDate();
+            let message = datePickerMessage(user);
+            slack.send({ channel: channel, text: "Autobot responding..." }, message).then(payload2 => {
+                let { channel, ts } = payload2;
+                ts_list.push({ channel: channel, ts: ts });
+                console.log(ts_list);
+                setTimeout((channel1, ts1) => {
+                    slack.send('chat.delete', { channel: channel1, ts: ts1 });
+                }, 60000, channel, ts);
+            });
+        }
+    }
+    else {
+        slack.send({ channel: channel, text: "<@" + user + ">, Too many words! Autobot isn't sentient... yet..." });
+        slack.send({ channel: channel, text: "Type /autobot for info" });
+    }
+    //slack.send({ channel: channel, text: "Dudu responding..." }, message);
+});
+
+
 //--------------------------------------------------------------------------------------------------------------------
+
+
 
 function dividerBlock() {
     return {
@@ -131,123 +197,246 @@ function titleOptions() {
 slack.on("block_actions", payload => {
 
     payload.actions.forEach(action => {
-        if (action.type === "datepicker") {
-            //console.log(action.selected_date);
-            chosen_date = action.selected_date;
-            sample = require('./schedule.json');
-            date_position = sample.conference_schedule.findIndex(element => { return element.date === action.selected_date });
-            let used_timeslots = [];
-            let blocks_data = [];
 
-            blocks_data.push(scheduleHeader(action.selected_date));
-            blocks_data.push(dividerBlock());
-
-            if (date_position === -1 || sample.conference_schedule[date_position].bookings.length === 0) {
-                unit_block = {
-                    type: "section",
-                    text: {
-                        type: "mrkdwn",
-                        text: "No bookings!"
+        if (action.type === "button") {
+            //console.log(payload);
+            //let { response_url } = payload;
+            if (action.action_id === "cancel") {
+                let words = action.value.split(" ");
+                //console.log(words);
+                fs.readFile('./src/schedule.json', 'utf8', function read(err, data) {
+                    if (err) {
+                        throw err;
                     }
-                }
-                blocks_data.push(unit_block);
+                    let schedule_obj = JSON.parse(data);
+                    console.log(schedule_obj);
+                    date_position = schedule_obj.conference_schedule.findIndex(element => { return element.date === chosen_date });
+                    console.log(date_position);
+                 
+                    if (schedule_obj.conference_schedule[date_position].date === words[1]) {
+                        let booking_position = schedule_obj.conference_schedule[date_position].bookings.findIndex(element => { return element.timeslots[0] === words[2] });
+                        if (booking_position !== -1 &&
+                            schedule_obj.conference_schedule[date_position].bookings[booking_position].user_id === words[0]) {
+                            console.log("Deleting booking entry " + booking_position + " on " + words[1]);
+                            schedule_obj.conference_schedule[date_position].bookings.splice(booking_position, 1);
+                            //console.log(schedule_obj.conference_schedule[date_position]);
 
-            }
-            else {
-                date_exists = true;
-                sample.conference_schedule[date_position].bookings.forEach(booking => {
-                    //let unit_block = new dict();
-                    unit_block = {
-                        type: "section",
-                        text: {
-                            type: "mrkdwn",
-                            text: "<@" + booking.user_id + "> has booked from *" + booking.start_time + "* to *" + booking.end_time + "*"
+                            if (schedule_obj.conference_schedule[date_position].bookings.length === 0) {
+                                console.log("No more entries in bookings, deleting...");
+                                schedule_obj.conference_schedule.splice(date_position, 1);
+                                date_exists = false;
+                            }
+                            json = JSON.stringify(schedule_obj, null, 4);
+                            fs.writeFile('./src/schedule.json', json, 'utf8', function read(err, data) {
+                                if (err) {
+                                    throw err;
+                                }
+                                deleted_positions.push(booking_position);
+                            });
+                       
+                                let { blocks } = payload.message;
+                                confirmation_message = {
+                                    type: "section",
+                                    text: {
+                                        type: "mrkdwn",
+                                        text: "This booking has been removed!"
+                                    }
+                            }
+                            console.log("Booking position = " + booking_position);
+                            console.log("Adjsted position = " + adjustedPosition(booking_position));
+                                blocks.splice(booking_position+2+adjustedPosition(booking_position), 1, confirmation_message);
+                                console.log(blocks);
+                                let message = {
+                                    blocks
+                            }
+                            console.log("schedule_ts = " + schedule_ts);
+                            slack.send('chat.update',{ ts: schedule_ts, channel: payload.channel.id }, message).then(payload2 => {
+                                schedule_ts = payload2.ts;
+                                //console.log("schedule_ts = " + schedule_ts);
+                            });
+                                
+                            
                         }
                     }
-                    blocks_data.push(unit_block);
-
-                    used_timeslots.push(...booking.timeslots);
+                
                 });
             }
-            blocks_data.push(dividerBlock());
+        }
 
-
-            title_options_list = titleOptions();
-            title_block = {
-                type: "section",
-                text: {
-                    type: "mrkdwn",
-                    text: "Pick an appropriate title for the booking"
-                },
-                accessory: {
-                    type: "static_select",
-                    action_id: "title",
-                    placeholder: {
-                        type: "plain_text",
-                        text: "Select a title"
-
-                    },
-                    options: title_options_list
-                }
-            }
-            blocks_data.push(title_block);
-
-
-            current_time = min_time_index;
-            let start_time_list = [];
-            while (current_time < max_time_index) {
-                if (used_timeslots.includes(current_time.toString())) {
-                    //console.log(current_time + " exists in the timeslots");
-                    current_time = current_time + 1;
-                    continue;
-                }
-                time_options = {
-                    text: {
-                        type: "plain_text",
-                        text: (Math.floor(current_time / 4)).toString() + ":" + (((current_time % 4) * 15).toString()).padStart(2, '0')
-                    },
-                    value: current_time.toString()
-                }
-                start_time_list.push(time_options);
-                current_time = current_time + 1;
-            }
-
-            //console.log(start_time_list);
-            start_time_block = {
-                type: "section",
-                text: {
-                    type: "mrkdwn",
-                    text: "Pick a starting time from the list"
-                },
-                accessory: {
-                    type: "static_select",
-                    action_id: "start_time",
-                    placeholder: {
-                        type: "plain_text",
-                        text: "Select a time"
-
-                    },
-                    options: start_time_list
-                }
-            }
-            blocks_data.push(start_time_block);
-
-
-            let message = {
-                blocks:
-                    blocks_data
-            }
-            //console.log(blocks_data);
-            slack.send({ channel: payload.channel.id, parse: "full" }, message);
-
-        }      
-        else if (action.type === "static_select") {
+        else if (action.type === "datepicker") {
+            resetValues();
+            deleted_positions = [];
+            //console.log(action.selected_date);
+            chosen_date = action.selected_date;
             fs.readFile('./src/schedule.json', 'utf8', function read(err, data) {
                 if (err) {
                     throw err;
                 }
                 schedule_obj = JSON.parse(data);
-                
+                date_position = schedule_obj.conference_schedule.findIndex(element => { return element.date === action.selected_date });
+                let used_timeslots = [];
+                let blocks_data = [];
+
+                blocks_data.push(scheduleHeader(action.selected_date));
+                blocks_data.push(dividerBlock());
+
+                if (date_position === -1 || schedule_obj.conference_schedule[date_position].bookings.length === 0) {
+                    unit_block = {
+                        type: "section",
+                        text: {
+                            type: "mrkdwn",
+                            text: "No bookings!"
+                        }
+                    }
+                    blocks_data.push(unit_block);
+
+                }
+                else {
+                    date_exists = true;
+                    schedule_obj.conference_schedule[date_position].bookings.forEach(booking => {
+                        //let unit_block = new dict();
+                        unit_block = {
+                            type: "section",
+                            text: {
+                                type: "mrkdwn",
+                                text: "<@" + booking.user_id + "> has booked from *" + booking.start_time + "* to *" + booking.end_time + "*"
+                            },
+                            accessory: {
+                                type: "button",
+                                text: {
+                                    type: "plain_text",
+                                    text: "Cancel",
+                                },
+                                confirm: {
+                                    title: {
+                                        type: "plain_text",
+                                        text: "Are you sure?"
+                                    },
+                                    text: {
+                                        type: "mrkdwn",
+                                        text: "Click confirm to remove this booking"
+                                    },
+                                    confirm: {
+                                        type: "plain_text",
+                                        text: "Confirm"
+                                    },
+                                    deny: {
+                                        type: "plain_text",
+                                        text: "Go back"
+                                    }
+                                },
+                                value: booking.user_id + " " + chosen_date + " " + booking.timeslots[0],
+                                action_id: "cancel"
+
+                            }
+                        }
+                        blocks_data.push(unit_block);
+
+                        used_timeslots.push(...booking.timeslots);
+                    });
+                }
+                blocks_data.push(dividerBlock());
+
+
+                title_options_list = titleOptions();
+                title_block = {
+                    type: "section",
+                    text: {
+                        type: "mrkdwn",
+                        text: "Pick an appropriate title for the booking"
+                    },
+                    accessory: {
+                        type: "static_select",
+                        action_id: "title",
+                        placeholder: {
+                            type: "plain_text",
+                            text: "Select a title"
+
+                        },
+                        options: title_options_list
+                    }
+                }
+                blocks_data.push(title_block);
+
+
+                current_time = min_time_index;
+                let start_time_list = [];
+                while (current_time < max_time_index) {
+                    if (used_timeslots.includes(current_time.toString())) {
+                        //console.log(current_time + " exists in the timeslots");
+                        current_time = current_time + 1;
+                        continue;
+                    }
+                    time_options = {
+                        text: {
+                            type: "plain_text",
+                            text: (Math.floor(current_time / 4)).toString() + ":" + (((current_time % 4) * 15).toString()).padStart(2, '0')
+                        },
+                        value: current_time.toString()
+                    }
+                    start_time_list.push(time_options);
+                    current_time = current_time + 1;
+                }
+
+                //console.log(start_time_list);
+                start_time_block = {
+                    type: "section",
+                    text: {
+                        type: "mrkdwn",
+                        text: "Pick a starting time from the list"
+                    },
+                    accessory: {
+                        type: "static_select",
+                        action_id: "start_time",
+                        placeholder: {
+                            type: "plain_text",
+                            text: "Select a time"
+
+                        },
+                        options: start_time_list
+                    }
+                }
+                blocks_data.push(start_time_block);
+
+
+                let message = {
+                    blocks:
+                        blocks_data
+                }
+                //console.log(blocks_data);
+                if (first_datepicker) {
+                    slack.send({ channel: payload.channel.id }, message).then(payload2 => {
+                        let { channel, ts } = payload2;
+                        schedule_ts = payload2.ts;
+                        first_datepicker = false;
+                        ts_list.push({ channel: channel, ts: ts });
+                        //console.log(ts_list);
+                        setTimeout((channel1, ts1) => {
+                            slack.send('chat.delete', { channel: channel1, ts: ts1 });
+                        }, 60000, channel, ts);
+                    });
+                }
+                else {
+                    console.log("Not first date picker!"+schedule_ts);
+                    slack.send('chat.update',{ ts: schedule_ts, channel: payload.channel.id }, message).then(payload2 => {
+                        let { channel, ts } = payload2;
+                        schedule_ts = payload2.ts;
+                        ts_list.push({ channel: channel, ts: ts });
+                        //console.log(ts_list);
+                        setTimeout((channel1, ts1) => {
+                            slack.send('chat.delete', { channel: channel1, ts: ts1 });
+                        }, 60000, channel, ts);
+                    });
+                }
+            });
+        }
+        else if (action.type === "static_select") {
+            fs.readFile('./src/schedule.json', 'utf8', function read(err, data) {
+                if (err) {
+                    throw err;
+                }
+                let schedule_obj = JSON.parse(data);
+
                 if (action.action_id === "title") {
                     chosen_title = action.selected_option.text.text;
                     title_set = true;
@@ -309,16 +498,32 @@ slack.on("block_actions", payload => {
 
 
                     let message = {
-                            blocks:
-                                blocks_data
-                               
+                        blocks:
+                            blocks_data
+
                     }
                     //console.log(blocks_data);
                     if (end_time_ts === null) {
-                        slack.send({ channel: payload.channel.id }, message);
+                        slack.send({ channel: payload.channel.id }, message).then(payload2 => {
+                            let { channel, ts } = payload2;
+                            end_time_ts = ts;
+                            ts_list.push({ channel: channel, ts: ts });
+                            console.log(ts_list);
+                            setTimeout((channel1, ts1) => {
+                                slack.send('chat.delete', { channel: channel1, ts: ts1 });
+                            }, 60000, channel, ts);
+                        });
                     }
                     else {
-                        slack.send({ channel: payload.channel.id,ts: end_time_ts }, message);
+                        console.log("replacing endtime prompt!");
+                        slack.send({ channel: payload.channel.id, ts: end_time_ts }, message).then(payload2 => {
+                            let { channel, ts } = payload2;
+                            ts_list.push({ channel: channel, ts: ts });
+                            console.log(ts_list);
+                            setTimeout((channel1, ts1) => {
+                                slack.send('chat.delete', { channel: channel1, ts: ts1 });
+                            }, 60000, channel, ts);
+                        });
                     }
 
                 }
@@ -384,11 +589,12 @@ slack.on("block_actions", payload => {
                             return result;
                         });
                     }
-                    json = JSON.stringify(schedule_obj,null,4);
+                    json = JSON.stringify(schedule_obj, null, 4);
                     fs.writeFile('./src/schedule.json', json, 'utf8', function read(err, data) {
                         if (err) {
                             throw err;
                         }
+                    });
                         confirmation_message = {
                             type: "section",
                             text: {
@@ -397,12 +603,16 @@ slack.on("block_actions", payload => {
                             }
                         }
                         let message = {
-                            blocks:[
+                            blocks: [
                                 confirmation_message
-                                ]}
-                        slack.send({ channel: payload.channel.id, link_names: "true" }, message)
-                        resetValues();
-                    });
+                            ]
+                        }
+                        slack.send({ channel: payload.channel.id, link_names: "true" }, message).then(payload2 => {
+                            console.log(ts_list);
+                            setTimeout(timeouts, 2000);
+                            
+                        });
+                    
                 }
             });
         }

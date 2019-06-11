@@ -1,0 +1,17 @@
+{
+    "welcome": {
+        "text": "Autobot is a simple bot that currently only handles conference room bookings. Suggestions for features and functionality are welcome.",
+        "attachments": [
+            {
+                "title": "Bugs reports here!",
+                "title_link": "slack://channel?team=TKBDZGJ12&id=UKBUQMB5E",
+                "text": "If the bots bugs out, please drop a DM with the issue."
+            },
+            {
+                "title": "Github link(Hosting on personal github for now)",
+                "title_link": "https://github.com/ragupathyl/slack_Autobot",
+                "text": "The core of the bot is cloned from another slack tutorial bot. Feel free to modify the current code and improve it."
+            }
+        ]
+    }
+}

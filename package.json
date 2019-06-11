@@ -1,11 +1,12 @@
 {
-  "name": "slack-onboarding-example",
+  "name": "slack-Autobot",
   "version": "1.0.0",
-  "description": "Example onboarding bot using Slack's Event API",
+  "description": "Conference room scheduler for workspace",
   "scripts": {
     "start": "node src/index.js"
   },
   "author": "John Agan <jagan@slack-corp.com>",
+  "modified_by": "Lakshmi Naarayanan Ragupathy <lragupathy@autonodyne.com>",
   "dependencies": {
     "tinyspeck": "^1.0.3"
   }
