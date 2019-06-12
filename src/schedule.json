@@ -2,87 +2,18 @@
     "text": "Conference room schedule for the next 7 days",
     "conference_schedule": [
         {
-            "date": "2019-06-11",
-            "bookings": [
-                {
-                    "title": "Hosting guests",
-                    "user_id": "UKBUQMB5E",
-                    "start_time": "6:30",
-                    "end_time": "7:30",
-                    "timeslots": [
-                        "26",
-                        "27",
-                        "28",
-                        "29"
-                    ]
-                }
-            ]
-        },
-        {
-            "date": "2019-06-17",
-            "bookings": [
-                {
-                    "title": "Hosting guests",
-                    "user_id": "UKBUQMB5E",
-                    "start_time": "10:00",
-                    "end_time": "11:15",
-                    "timeslots": [
-                        "40",
-                        "41",
-                        "42",
-                        "43",
-                        "44"
-                    ]
-                },
-                {
-                    "title": "Conference call",
-                    "user_id": "UKBUQMB5E",
-                    "start_time": "10:00",
-                    "end_time": "10:45",
-                    "timeslots": [
-                        "40",
-                        "41",
-                        "42"
-                    ]
-                }
-            ]
-        },
-        {
-            "date": "2019-06-18",
-            "bookings": [
-                {
-                    "title": "Ping-pong",
-                    "user_id": "UKBUQMB5E",
-                    "start_time": "8:00",
-                    "end_time": "9:30",
-                    "timeslots": [
-                        "32",
-                        "33",
-                        "34",
-                        "35",
-                        "36",
-                        "37"
-                    ]
-                }
-            ]
-        },
-        {
-            "date": "2019-06-21",
+            "date": "2019-06-20",
             "bookings": [
                 {
                     "title": "Ping-pong",
                     "user_id": "UKBUQMB5E",
                     "start_time": "7:00",
-                    "end_time": "9:00",
+                    "end_time": "8:00",
                     "timeslots": [
                         "28",
                         "29",
                         "30",
-                        "31",
-                        "32",
-                        "33",
-                        "34",
-                        "35"
+                        "31"
                     ]
                 }
             ]
@@ -116,6 +47,22 @@
                         "30",
                         "31",
                         "32"
+                    ]
+                },
+                {
+                    "title": "Hosting guests",
+                    "user_id": "UKBUQMB5E",
+                    "start_time": "8:15",
+                    "end_time": "10:15",
+                    "timeslots": [
+                        "33",
+                        "34",
+                        "35",
+                        "36",
+                        "37",
+                        "38",
+                        "39",
+                        "40"
                     ]
                 }
             ]

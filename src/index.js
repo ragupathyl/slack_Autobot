@@ -22,6 +22,7 @@ let max_time_index = 72;
 let ts_list = [];
 let deleted_positions = [];
 let first_datepicker = true;
+let current_user = null;
 
 function resetValues() {
     start_time_set = false;
@@ -53,6 +54,7 @@ function timeouts() {
     });
     ts_list = [];
     resetValues();
+    current_user = null;
 }
 // build the user's current onboarding message
 function getHelpMessage() {
@@ -60,7 +62,7 @@ function getHelpMessage() {
 }
 
 slack.on('/autobot', payload => {
-    console.log(payload);
+    //console.log(payload);
     autobot_help = require('./autobot.json');
     let { response_url } = payload;
     let message = getHelpMessage();
@@ -98,20 +100,30 @@ function datePickerMessage(user) {
 }
 slack.on('app_mention', payload => {
     //let { event } = payload;
+
+    //console.log("bot called by mention");
     first_datepicker = true;
     let { user, channel, text } = payload.event;
     let words = text.split(" ");
     if (words.length <= 2) {
-        if (words.includes("thanks") || words.includes("Thanks!") || words.includes("Thanks") || words.includes("thanks!") || words.includes("Thank you") || words.includes("thank you")) {
+        if (words.includes("thanks") || words.includes("Thanks!") || words.includes("Thanks") || words.includes("thanks!")) {
             slack.send({ channel: channel, text: "<@" + user + ">, Of course!" })
         }
         else {
             today = getTodayDate();
+            if (current_user === null) {
+                current_user = user;
+                console.log("Logging a new user : " + current_user);
+                
+            }
+            else if (current_user !== user) {
+                slack.send({ channel: user, text: "<@" + user + ">, Autobot is talking to another user. Please summon after one minute." });
+            }
             let message = datePickerMessage(user);
             slack.send({ channel: channel, text: "Autobot responding..." }, message).then(payload2 => {
                 let { channel, ts } = payload2;
                 ts_list.push({ channel: channel, ts: ts });
-                console.log(ts_list);
+                //console.log(ts_list);
                 setTimeout((channel1, ts1) => {
                     slack.send('chat.delete',{channel: channel1,ts: ts1});
                 },60000, channel, ts);
@@ -129,10 +141,12 @@ slack.on('app_mention', payload => {
 
 
 slack.on('message', payload => {
-    //console.log(payload);
-    first_datepicker = true;
+
+    //console.log("bot called by dm message");
+    
     let { user, channel, text, subtype } = payload.event;
-    if (subtype === "bot_message" || subtype === 'message_changed' || channel!== BOT_CHANNEL) return;
+    if (subtype === "bot_message" || subtype === 'message_changed' || subtype === 'message_deleted'  || channel !== BOT_CHANNEL) return;
+    //console.log(payload);
     let words = text.split(" ");
     if (words.length <= 2) {
         if (words.includes("thanks") || words.includes("Thanks!") || words.includes("Thanks") || words.includes("thanks!") || words.includes("Thank you") || words.includes("thank you")) {
@@ -140,11 +154,20 @@ slack.on('message', payload => {
         }
         else {
             today = getTodayDate();
+            if (current_user === null) {
+                current_user = user;
+                console.log("Logging a new user : " + current_user);
+                
+            }
+            else if (current_user !== user) {
+                slack.send({ channel: user, text: "<@" + user + ">, Autobot is talking to another user. Please summon after one minute." });
+            }
             let message = datePickerMessage(user);
+            first_datepicker = true;
             slack.send({ channel: channel, text: "Autobot responding..." }, message).then(payload2 => {
                 let { channel, ts } = payload2;
                 ts_list.push({ channel: channel, ts: ts });
-                console.log(ts_list);
+                //console.log(ts_list);
                 setTimeout((channel1, ts1) => {
                     slack.send('chat.delete', { channel: channel1, ts: ts1 });
                 }, 60000, channel, ts);
@@ -195,13 +218,14 @@ function titleOptions() {
     return title_options_list;
 }
 slack.on("block_actions", payload => {
-
+    if (payload.user.id !== current_user) return;
     payload.actions.forEach(action => {
 
         if (action.type === "button") {
             //console.log(payload);
             //let { response_url } = payload;
             if (action.action_id === "cancel") {
+                
                 let words = action.value.split(" ");
                 //console.log(words);
                 fs.readFile('./src/schedule.json', 'utf8', function read(err, data) {
@@ -209,20 +233,20 @@ slack.on("block_actions", payload => {
                         throw err;
                     }
                     let schedule_obj = JSON.parse(data);
-                    console.log(schedule_obj);
+                    //console.log(schedule_obj);
                     date_position = schedule_obj.conference_schedule.findIndex(element => { return element.date === chosen_date });
-                    console.log(date_position);
-                 
+                    //console.log(date_position);
+                    if (date_position === -1) return;
                     if (schedule_obj.conference_schedule[date_position].date === words[1]) {
                         let booking_position = schedule_obj.conference_schedule[date_position].bookings.findIndex(element => { return element.timeslots[0] === words[2] });
                         if (booking_position !== -1 &&
                             schedule_obj.conference_schedule[date_position].bookings[booking_position].user_id === words[0]) {
-                            console.log("Deleting booking entry " + booking_position + " on " + words[1]);
+                            //console.log("Deleting booking entry " + booking_position + " on " + words[1]);
                             schedule_obj.conference_schedule[date_position].bookings.splice(booking_position, 1);
                             //console.log(schedule_obj.conference_schedule[date_position]);
 
                             if (schedule_obj.conference_schedule[date_position].bookings.length === 0) {
-                                console.log("No more entries in bookings, deleting...");
+                                //console.log("No more entries in bookings, deleting date...");
                                 schedule_obj.conference_schedule.splice(date_position, 1);
                                 date_exists = false;
                             }
@@ -242,14 +266,14 @@ slack.on("block_actions", payload => {
                                         text: "This booking has been removed!"
                                     }
                             }
-                            console.log("Booking position = " + booking_position);
-                            console.log("Adjsted position = " + adjustedPosition(booking_position));
+                            //console.log("Booking position = " + booking_position);
+                            //console.log("Adjsted position = " + adjustedPosition(booking_position));
                                 blocks.splice(booking_position+2+adjustedPosition(booking_position), 1, confirmation_message);
-                                console.log(blocks);
+                                //console.log(blocks);
                                 let message = {
                                     blocks
                             }
-                            console.log("schedule_ts = " + schedule_ts);
+                            //console.log("schedule_ts = " + schedule_ts);
                             slack.send('chat.update',{ ts: schedule_ts, channel: payload.channel.id }, message).then(payload2 => {
                                 schedule_ts = payload2.ts;
                                 //console.log("schedule_ts = " + schedule_ts);
@@ -410,19 +434,19 @@ slack.on("block_actions", payload => {
                         schedule_ts = payload2.ts;
                         first_datepicker = false;
                         ts_list.push({ channel: channel, ts: ts });
-                        //console.log(ts_list);
+                        ////console.log(ts_list);
                         setTimeout((channel1, ts1) => {
                             slack.send('chat.delete', { channel: channel1, ts: ts1 });
                         }, 60000, channel, ts);
                     });
                 }
                 else {
-                    console.log("Not first date picker!"+schedule_ts);
+                    //console.log("Not first date picker!"+schedule_ts);
                     slack.send('chat.update',{ ts: schedule_ts, channel: payload.channel.id }, message).then(payload2 => {
                         let { channel, ts } = payload2;
                         schedule_ts = payload2.ts;
                         ts_list.push({ channel: channel, ts: ts });
-                        //console.log(ts_list);
+                        ////console.log(ts_list);
                         setTimeout((channel1, ts1) => {
                             slack.send('chat.delete', { channel: channel1, ts: ts1 });
                         }, 60000, channel, ts);
@@ -508,7 +532,7 @@ slack.on("block_actions", payload => {
                             let { channel, ts } = payload2;
                             end_time_ts = ts;
                             ts_list.push({ channel: channel, ts: ts });
-                            console.log(ts_list);
+                            //console.log(ts_list);
                             setTimeout((channel1, ts1) => {
                                 slack.send('chat.delete', { channel: channel1, ts: ts1 });
                             }, 60000, channel, ts);
@@ -519,7 +543,7 @@ slack.on("block_actions", payload => {
                         slack.send({ channel: payload.channel.id, ts: end_time_ts }, message).then(payload2 => {
                             let { channel, ts } = payload2;
                             ts_list.push({ channel: channel, ts: ts });
-                            console.log(ts_list);
+                            //console.log(ts_list);
                             setTimeout((channel1, ts1) => {
                                 slack.send('chat.delete', { channel: channel1, ts: ts1 });
                             }, 60000, channel, ts);
@@ -531,7 +555,7 @@ slack.on("block_actions", payload => {
                     end_time_ts = payload.message.ts;
                     end_time_set = true;
                     end_time_index = action.selected_option.value;
-                    console.log("End time index : " + end_time_index);
+                    //console.log("End time index : " + end_time_index);
                     end_time = action.selected_option.text.text
                 }
 
@@ -608,11 +632,11 @@ slack.on("block_actions", payload => {
                             ]
                         }
                         slack.send({ channel: payload.channel.id, link_names: "true" }, message).then(payload2 => {
-                            console.log(ts_list);
+                            //console.log(ts_list);
                             setTimeout(timeouts, 2000);
                             
                         });
-                    
+                    current_user = null;
                 }
             });
         }
